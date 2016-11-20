@@ -1,39 +1,40 @@
+# coding:UTF-8
 import sys
 import os
 sys.path.append('./keras')
 sys.path.append("./entity")
 import json
+import codecs
 import scipy.io
 
 from gensim import models
 from load_models import *
 from topk_utils import *
 
-jsonfile = open('./data/example_tree.json', 'r')
+jsonfile = open('./data/example_travel_tree.json', 'r')
 json_data=jsonfile.read()
 jsondata=json.loads(json_data)
 jsonfile.close()
 json_imgs=jsondata['images']
 
+features_path = os.path.join('./data/', 'example_travel.mat')
+features_struct = scipy.io.loadmat(features_path)['result']#.transpose() # this features array length have to be same with images length
 
-features_path = os.path.join('./data/', 'example.mat')
-features_struct = scipy.io.loadmat(features_path)['feats'].transpose() # this features array length have to be same with images length
-
-DOC2VEC_MODEL_PATH='./model/example.doc2vec'
+DOC2VEC_MODEL_PATH='./model/example_travel.doc2vec'
 
 
-jsonfile = open('./data/example_test.json', 'r')
+jsonfile = open('./data/example_travel_test.json', 'r')
 json_data=jsonfile.read()
 jsondata=json.loads(json_data)
 jsonfile.close()
 json_imgs_test=jsondata['images']
 
 
-features_path = os.path.join('./data/', 'example_test.mat')
-features_struct_test = scipy.io.loadmat(features_path)['feats'].transpose() # this features array length have to be same with images length
+features_path = os.path.join('./data/', 'example_travel_test.mat')    #1000*4096
+features_struct_test = scipy.io.loadmat(features_path)['result']#.transpose() # this features array length have to be same with images length
 
-RCN_MODEL_PATH='./model/rcn_5.hdf5'
-CRCN_MODEL_PATH='./model/crcn_5.hdf5'
+#RCN_MODEL_PATH='./model/rcn_travel_5.hdf5'
+CRCN_MODEL_PATH='./model/crcn_travel_5.hdf5'
 
 contents={}
 
@@ -44,7 +45,9 @@ for i,json_img in enumerate(json_imgs_test):
         pass#already in
     else:
         contents[pageurl]=[]
-    contents[pageurl].append({'imgid':str(i),'filename':json_img['filename'],'sentences':json_img['sentences'],'feature':feature})
+    contents[pageurl].append({'imgid':str(i),'sentences':json_img['sentence'],'feature':feature})
+
+#print 'contents',contents
 
 
 MAX_SEQ_LEN=15
@@ -53,11 +56,11 @@ MAX_SEQ_LEN=15
 contents_filtered = {}
 
 for key, item in contents.iteritems():
-    if len(item) > 4:
-        contents_filtered[key] = item[:MAX_SEQ_LEN]
-
+    #if len(item) > 4:
+    contents_filtered[key] = item[:MAX_SEQ_LEN]
 
 testset=contents_filtered.items()
+#print 'testset',testset
 
 count=0
 
@@ -66,31 +69,32 @@ model_loaded_entity.load_weights(CRCN_MODEL_PATH)
 model_loaded_entity.compile(loss='crcn_score_func',optimizer='rmsprop')
 
 
-model_loaded = create_rcn_blstm()
-model_loaded.load_weights(RCN_MODEL_PATH)
-model_loaded.compile(loss='rcn_score_func',optimizer='rmsprop')
+#model_loaded = create_rcn_blstm()
+#model_loaded.load_weights(RCN_MODEL_PATH)
+#model_loaded.compile(loss='rcn_score_func',optimizer='rmsprop')
 
 
 doc2vecmodel = models.Doc2Vec.load(DOC2VEC_MODEL_PATH)
 
-
 crcn_output_list=[]
-rcn_output_list=[]
+#rcn_output_list=[]
 
 
 
 for i,tests in enumerate(testset):
-
+    print i,tests
     count+=1
     crcn_output=output_list_topk_crcn(tests[1],json_imgs,features_struct,doc2vecmodel,model_loaded_entity)
     crcn_output_list.append(crcn_output)
 
-    rcn_output=output_list_topk_rcn(tests[1],json_imgs,features_struct,doc2vecmodel,model_loaded)
-    rcn_output_list.append(rcn_output)
+#    rcn_output=output_list_topk_rcn(tests[1],json_imgs,features_struct,doc2vecmodel,model_loaded)
+#    rcn_output_list.append(rcn_output)
     print i
 
-pickle.dump(crcn_output_list,open('./output_crcn.p','w'))
-pickle.dump(rcn_output_list,open('./output_rcn.p','w'))
-
+#pickle.dump(crcn_output_list,open('./output_crcn_travel.p','w'))
+#pickle.dump(rcn_output_list,open('./output_rcn.p','w'))
+data_json = json.dumps(crcn_output_list,ensure_ascii=False)
+with codecs.open('output_crcn_travel1.p','w','utf-8') as f:
+    f.write(data_json)
 
 

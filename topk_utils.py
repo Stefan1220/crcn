@@ -1,4 +1,4 @@
-
+# coding:UTF-8
 import numpy as np
 import math
 
@@ -75,13 +75,17 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
     paragraph_list=[]
     testdata_index_list=[testimg['imgid'] for testimg in testdata]
     image_seq_features=[testimg['feature'] for testimg in testdata]
+    print 'testdata_index_list',testdata_index_list
+    print 'image_seq_features',image_seq_features
     for seq_feature in image_seq_features:
         for i,data_feature in enumerate(features_struct):
-            dst = distance.euclidean(seq_feature,data_feature)
+            dst = distance.euclidean(seq_feature,data_feature)   #测试图片与训练图片的欧氏距离
             dict_dst[i]=dst
             #we considered euclidean not cosine similarity
-        sorted_list=sorted(dict_dst.iteritems(), key=itemgetter(1), reverse=False)
+        #print 'dict_dst',dict_dst
+        sorted_list=sorted(dict_dst.iteritems(), key=itemgetter(1), reverse=False)  #reverse=False
         #img_match_index_list.append(sorted_list[:TOPK])
+        #print 'sorted_list',sorted_list
         top_paragraph=[]
         count=0
         for dict_top in sorted_list:
@@ -89,12 +93,16 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
                 break
             try:
                 index_match=dict_top[0]
+                print dict_top[0]  #id
+                print dict_top[1]  #distance
                 if index_match in testdata_index_list or dict_top[1]<0.01: #remove test set in index_match
                     continue
-                imgid=json_imgs[index_match]['imgid']
-                doc2vecmodel[str(imgid)] #check sentence exits
+                #imgid=json_imgs[index_match]['imgid']
+                imgid = index_match
+                doc2vecmodel.docvecs[str(imgid)] #check sentence exits
                 count+=1
                 top_paragraph.append(imgid)
+                print 'top_paragraph',top_paragraph
             except:
                 pass
         paragraph_list.append(top_paragraph)
@@ -103,7 +111,7 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
     #paragraph_list=[[imgid1 imgid2 ..imgidk ], ..seq numb]
     # divide and concat
     #have to change variable split number
-    if len(paragraph_list)>=SPLIT_VAL+1:
+    if len(paragraph_list)>=SPLIT_VAL+1: 
 
         rank_comb_list=[]
         split_num=len(paragraph_list)/SPLIT_VAL
@@ -133,7 +141,7 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
                     imgseqs[i][j]=image_seq_features[sp*SPLIT_VAL+j]
                     key_seq.append(imgid)
                     json_img=json_imgs[imgid]
-                    for sentence in json_img['sentences']:
+                    for sentence in json_img['sentence']:
                         if sentence['tree'] not in document_tree:
                             document_tree+=sentence['tree']
                     sentseqs[i][j]=doc2vecmodel[str(imgid)] #always has paragraph cleaned data
@@ -162,10 +170,10 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
                 key_seq.append(imgid)
                 imgseqs[i][j]=image_seq_features[j]
                 json_img=json_imgs[imgid]
-                for sentence in json_img['sentences']:
+                for sentence in json_img['sentence']:
                     if sentence['tree'] not in document_tree:
                         document_tree+=sentence['tree']
-                sentseqs[i][j]=doc2vecmodel[str(imgid)] #always has paragraph cleaned data
+                sentseqs[i][j]=doc2vecmodel.docvecs[str(imgid)] #always has paragraph cleaned data
             key_seq_list.append(key_seq)
             document_trees.append(document_tree)
         entity_feat=entity_feature(document_trees)
@@ -185,25 +193,29 @@ def output_list_topk_crcn(testdata,json_imgs,features_struct,doc2vecmodel,model_
             key_seq.append(imgid)
             imgseqs[i][j]=image_seq_features[j]
             json_img=json_imgs[imgid]
-            for sentence in json_img['sentences']:
+            for sentence in json_img['sentence']:
                 if sentence['tree'] not in document_tree:
                     document_tree+=sentence['tree']
-            sentseqs[i][j]=doc2vecmodel[str(imgid)] #always has paragraph cleaned data
+            sentseqs[i][j]=doc2vecmodel.docvecs[str(imgid)] #always has paragraph cleaned data
         key_seq_list.append(key_seq)
         document_trees.append(document_tree)
     entity_feat=entity_feature(document_trees)
     final_list=rank_sequence_entity(sentseqs,imgseqs,entity_feat,key_seq_list,model_loaded)
-
-    final_list=final_list[:BRNN_FINAL_SELECT_TOP]
+    print 'final_list1',final_list
+    final_list=final_list[:BRNN_FINAL_SELECT_TOP]    #[[5],[4],[20]]
+    print 'final_list2',final_list
     final_content_list=[]
-    for imgid in final_list[0]:
+    print 'final_list[0]',final_list[0]
+    for imgid in final_list:  #final_list[0]
+        print 'imgid',imgid[0]  #imgid
+        imgid = imgid[0]
         sentence_concat=""
-        for sentence in json_imgs[imgid]['sentences']:
-            ensent=sentence['raw'].encode('ascii','ignore')
+        for sentence in json_imgs[imgid]['sentence']:
+            ensent=sentence['raw']#.encode('ascii','ignore')
             if ensent not in sentence_concat:
                 sentence_concat+=ensent
         final_content_list.append(sentence_concat)
-
+    print 'final_content_list',final_content_list
     return final_content_list
 def output_topk_rcn(testdata,json_imgs,features_struct,doc2vecmodel,model_loaded):
     return ' '.join(output_list_topk_rcn(testdata,json_imgs,features_struct,doc2vecmodel,model_loaded))

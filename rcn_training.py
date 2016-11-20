@@ -31,16 +31,16 @@ jsonfile = open('./data/example_tree.json', 'r')
 
 json_data=jsonfile.read()
 jsondata=json.loads(json_data)
-json_imgs=jsondata['images']
+json_imgs=jsondata['images']   #3000条数据
 
-features_path = os.path.join('./data/', 'example.mat')
-features_struct = scipy.io.loadmat(features_path)['feats'].transpose()
+features_path = os.path.join('./data/', 'example.mat')   #原文件是4096*3000的矩阵
+features_struct = scipy.io.loadmat(features_path)['feats'].transpose()  #转置
 
-contents={}
+contents={}  #对example的3000条数据的重构(预处理)
 
 for i,json_img in enumerate(json_imgs):
-    pageurl=os.path.basename(json_img['docpath']).encode('ascii','ignore')
-    imgfeature=features_struct[i]
+    pageurl=os.path.basename(json_img['docpath']).encode('ascii','ignore')  #pageurl
+    imgfeature=features_struct[i]  #imgfeature
     concatstring=""
     for sentence in json_img['sentences']:
         concatstring+=sentence['raw']

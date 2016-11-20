@@ -4,7 +4,7 @@ from keras.models import Sequential
 #from keras.models import Graph
 from keras.layers.embeddings import Embedding
 from keras.layers.core import *
-from keras.layers.convolutional import Convolution2D, MaxPooling2D
+#from keras.layers.convolutional import Convolution2D, MaxPooling2D
 from keras.layers.normalization import BatchNormalization
 from keras.optimizers import SGD
 from keras.layers.recurrent import *

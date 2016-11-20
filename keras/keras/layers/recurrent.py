@@ -3,6 +3,9 @@ from __future__ import absolute_import
 import theano
 import theano.tensor as T
 import numpy as np
+import os
+import scipy.io
+import math
 
 from .. import activations, initializations
 from ..utils.theano_utils import shared_zeros, alloc_zeros_matrix
@@ -11,6 +14,10 @@ from .. import regularizers
 
 from six.moves import range
 
+#context_path = os.path.join('./data/', 'example.mat')     #3000*4096
+#context_temp = scipy.io.loadmat(context_path)['feats'].transpose()
+#context = context_temp[0:100]
+#print context.shape[0],context.shape[1]
 
 class BLSTM(Layer):
     def __init__(self, input_dim, output_dim,init='glorot_uniform', inner_init='orthogonal',
@@ -30,31 +37,39 @@ class BLSTM(Layer):
         self.inner_activation = activations.get(inner_activation)
         self.input = T.tensor3()
 
-        self.W_if = self.init((self.input_dim, self.output_dim))
+        self.W_if = self.init((self.input_dim, self.output_dim))    # input
         self.W_ib = self.init((self.input_dim, self.output_dim))
         self.U_if = self.inner_init((self.output_dim, self.output_dim))
         self.U_ib = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_if = self.inner_init((self.output_dim, self.output_dim))       #z
+        #self.Z_ib = self.inner_init((self.output_dim, self.output_dim))
         self.b_if = shared_zeros((self.output_dim))
         self.b_ib = shared_zeros((self.output_dim))
 
-        self.W_ff = self.init((self.input_dim, self.output_dim))
+        self.W_ff = self.init((self.input_dim, self.output_dim))    #forget
         self.W_fb = self.init((self.input_dim, self.output_dim))
         self.U_ff = self.inner_init((self.output_dim, self.output_dim))
         self.U_fb = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_ff = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_fb = self.inner_init((self.output_dim, self.output_dim))
         self.b_ff = shared_zeros((self.output_dim))
         self.b_fb = shared_zeros((self.output_dim))
 
-        self.W_cf = self.init((self.input_dim, self.output_dim))
+        self.W_cf = self.init((self.input_dim, self.output_dim))    #memory
         self.W_cb = self.init((self.input_dim, self.output_dim))
         self.U_cf = self.inner_init((self.output_dim, self.output_dim))
         self.U_cb = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_cf = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_cb = self.inner_init((self.output_dim, self.output_dim))
         self.b_cf = shared_zeros((self.output_dim))
         self.b_cb = shared_zeros((self.output_dim))
 
-        self.W_of = self.init((self.input_dim, self.output_dim))
+        self.W_of = self.init((self.input_dim, self.output_dim))    #output
         self.W_ob = self.init((self.input_dim, self.output_dim))
         self.U_of = self.inner_init((self.output_dim, self.output_dim))
         self.U_ob = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_of = self.inner_init((self.output_dim, self.output_dim))
+        #self.Z_ob = self.inner_init((self.output_dim, self.output_dim))
         self.b_of = shared_zeros((self.output_dim))
         self.b_ob = shared_zeros((self.output_dim))
 
@@ -79,6 +94,8 @@ class BLSTM(Layer):
             self.W_yf, self.W_yb, self.b_y
             #self.W_y, self.b_y
         ]
+
+
         if regularize:
             self.regularizers = []
             for i in self.params:
@@ -87,15 +104,93 @@ class BLSTM(Layer):
         if weights is not None:
             self.set_weights(weights)
 
+    # some utilities
+    def ortho_weight(ndim):
+        """
+        Random orthogonal weights
+
+        Used by norm_weights(below), in which case, we
+        are ensuring that the rows are orthogonal
+        (i.e W = U \Sigma V, U has the same
+        # of rows, V has the same # of cols)
+        """
+        W = np.random.randn(ndim, ndim)
+        u, _, _ = np.linalg.svd(W)
+        return u.astype('float32')
+
+    def norm_weight(nin,nout=None, scale=0.01, ortho=True):
+        """
+        Random weights drawn from a Gaussian
+        """
+        #print type(nin), nin, type(nout), nout
+        if nout is None:
+            nout = nin
+        if nout == nin and ortho:
+            W = self.ortho_weight(nin)
+        else:
+
+            W = scale * np.random.randn(nin, nout)
+        return W.astype('float32')
+
+    def tanh(x):
+        return T.tanh(x)
+
     def _step(self,
         xi_t, xf_t, xo_t, xc_t,
-        h_tm1, c_tm1,
+        h_tm1, c_tm1, 
         u_i, u_f, u_o, u_c):
-        i_t = self.inner_activation(xi_t + T.dot(h_tm1, u_i))
+
+        #assert context, 'Context must be provided'
+        #print context.shape
+
+        # attention: context -> hidden
+        #Wc_att = self.norm_weight(4096, ortho=False)   #dimctx
+        #index = h_tm1.shape[1]
+        #context = context_temp[0:index]
+
+        #Wc_att = 0.01 * np.random.randn(4096,4096)
+
+        # attention: LSTM -> hidden
+        #Wd_att = self.norm_weight(300,4096)  #dim,dimctx
+        #Wd_att = 0.01 * np.random.randn(100,4096)
+        #Wd_att = 0.01 * np.random.randn(300,4096)
+
+        # attention:
+        #U_att = self.norm_weight(dimctx,1)
+        #U_att = 0.01 * np.random.randn(4096,1)
+
+        #W_att = 0.01 * np.random.randn(100,4096)
+        #W_att = 0.01 * np.random.randn(300,4096)
+
+        #ctx = T.dot(context, Wc_att)
+        #print "ctx.shape",ctx.shape
+        #state = T.dot(h_tm1, Wd_att)
+        #print "state.shape",state.shape
+        #ctx = ctx + state[:,None,:]
+        '''
+        ctx = ctx + state
+        ctx_list = []
+        ctx_list.append(ctx)
+        ctx = T.tanh(ctx)
+        alpha = T.dot(ctx,U_att)
+
+        alpha_pre = alpha
+        alpha_shp = alpha.shape
+        alpha = T.nnet.softmax(alpha.reshape([alpha_shp[0],alpha_shp[1]])) # softmax
+        alpha = T.dot(alpha.transpose(),W_att)
+        z_t = ( context * alpha).sum(1)
+        '''
+
+        i_t = self.inner_activation(xi_t + T.dot(h_tm1, u_i))      #tm1 => t - 1
         f_t = self.inner_activation(xf_t + T.dot(h_tm1, u_f))
         c_t = f_t * c_tm1 + i_t * self.activation(xc_t + T.dot(h_tm1, u_c))
         o_t = self.inner_activation(xo_t + T.dot(h_tm1, u_o))
         h_t = o_t * self.activation(c_t)
+
+        alpha = T.nnet.softmax(h_t)
+        #c_t = (c_t * alpha).sum(1)
+        c_t = c_t * alpha
+
         return h_t, c_t
 
     def output(self, train):
@@ -122,7 +217,7 @@ class BLSTM(Layer):
         xof = T.dot(X, self.W_of) + self.b_of
         xob = T.dot(X, self.W_ob) + self.b_ob
 
-        [outputs_f, memories_f], updates_f = theano.scan(
+        [outputs_f, memories_f], updates_f = theano.scan(        #forword  
             self._step,
             sequences=[xif, xff, xof, xcf],
             outputs_info=[
@@ -132,7 +227,7 @@ class BLSTM(Layer):
             non_sequences=[self.U_if, self.U_ff, self.U_of, self.U_cf],
             truncate_gradient=self.truncate_gradient
         )
-        [outputs_b, memories_b], updates_b = theano.scan(
+        [outputs_b, memories_b], updates_b = theano.scan(        #backword
             self._step,
             sequences=[xib, xfb, xob, xcb],
             outputs_info=[
